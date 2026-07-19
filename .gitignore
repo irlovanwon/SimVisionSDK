@@ -1,0 +1,31 @@
+# Build artifacts
+build/
+dist/
+*.o
+*.a
+*.so
+
+# Runtime generated (not tracked)
+log/
+logs/
+status/
+*.pid
+*.out
+
+# Certs / secrets (generated locally, never committed)
+certs/*.pem
+certs/*.crt
+certs/*.key
+certs/*.srl
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# DataSource sample binaries (regenerable) — keep folder, ignore large binaries
+DataSource/StereoImage/*.jpg
+DataSource/StereoImage/*.png
+DataSource/StereoImage/*.jpeg

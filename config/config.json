@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "admin_server": {
+    "host": "0.0.0.0",
+    "port": 8443,
+    "cert_path": "certs/server.crt",
+    "key_path": "certs/server.key",
+    "thread_strategy": "hybrid",
+    "worker_threads": 4,
+    "server_id": "sim_vision_01"
+  },
+  "capture": {
+    "fps": 15,
+    "data_source_dir": "DataSource",
+    "stereo_image_dir": "DataSource/StereoImage",
+    "image_width": 1280,
+    "image_height": 720,
+    "image_channels": 4
+  },
+  "zmq": {
+    "transport": "ipc",
+    "hwm": 10,
+    "immediate": true,
+    "linger_ms": 1000,
+    "endpoints": {
+      "visual_2d": "ipc:///tmp/sim_vision_visual_2d",
+      "visual_3d": "ipc:///tmp/sim_vision_visual_3d",
+      "sensor_data": "ipc:///tmp/sim_vision_sensor_data"
+    },
+    "pub_id": "sim_vision_pub_01"
+  },
+  "spsc": {
+    "queue_size": 8,
+    "drop_policy": "newest",
+    "cv_timeout_ms": 10
+  },
+  "parameters": {
+    "fps": 15,
+    "exposure_time": 0,
+    "auto_exposure": "On",
+    "gain_digital": 1,
+    "gain_analog": 1000,
+    "auto_gain": "On",
+    "depth_mode": "NEURAL"
+  },
+  "log_level": "info"
+}
