@@ -12,7 +12,17 @@ std::string Response::to_json() const {
     nlohmann::json j;
     j["code"] = static_cast<int>(code);
     j["message"] = message;
-    j["data"] = data;
+    j["detail"] = detail;
+    j["server_id"] = server_id;
+    j["client_id"] = client_id;
+    nlohmann::json rt;
+    rt["sec"] = recv_sec;
+    rt["nsec"] = recv_nsec;
+    j["recv_timestamp"] = rt;
+    nlohmann::json st;
+    st["sec"] = send_sec;
+    st["nsec"] = send_nsec;
+    j["send_timestamp"] = st;
     return j.dump();
 }
 

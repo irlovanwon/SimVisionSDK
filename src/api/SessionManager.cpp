@@ -1,6 +1,6 @@
 /*
  * Copyright(c) 2026-2030, VIATECH & UZONE All rights reserved
- * Des: Session manager — issues client ids and tracks connected clients
+ * Des: Session manager — tracks connected clients by string client_id
  * Date: 20260719
  * Modification:
  */
@@ -8,31 +8,24 @@
 
 namespace sim_vision {
 
-int64_t SessionManager::connect() {
+bool SessionManager::connect(const std::string& client_id) {
     std::lock_guard<std::mutex> lk(mtx_);
-    int64_t id = next_id_++;
-    sessions_[id] = true;
-    return id;
+    return sessions_.insert(client_id).second;
 }
 
-bool SessionManager::disconnect(int64_t client_id) {
+bool SessionManager::disconnect(const std::string& client_id) {
     std::lock_guard<std::mutex> lk(mtx_);
     return sessions_.erase(client_id) > 0;
 }
 
-bool SessionManager::is_connected(int64_t client_id) const {
+bool SessionManager::is_connected(const std::string& client_id) const {
     std::lock_guard<std::mutex> lk(mtx_);
-    auto it = sessions_.find(client_id);
-    return it != sessions_.end() && it->second;
+    return sessions_.find(client_id) != sessions_.end();
 }
 
 int SessionManager::session_count() const {
     std::lock_guard<std::mutex> lk(mtx_);
-    int n = 0;
-    for (const auto& kv : sessions_) {
-        if (kv.second) ++n;
-    }
-    return n;
+    return static_cast<int>(sessions_.size());
 }
 
 }  // namespace sim_vision

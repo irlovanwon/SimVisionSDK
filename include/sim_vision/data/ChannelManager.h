@@ -10,19 +10,19 @@
 
 #include "sim_vision/common/Types.h"
 
-#include <cstdint>
 #include <map>
 #include <mutex>
 #include <set>
+#include <string>
 #include <vector>
 
 namespace sim_vision {
 
 class ChannelManager {
 public:
-    void start_capture(int64_t client_id, const std::vector<DataType>& types);
-    void stop_capture(int64_t client_id, const std::vector<DataType>& types);
-    bool disconnect_client(int64_t client_id);
+    void start_capture(const std::string& client_id, const std::vector<DataType>& types);
+    void stop_capture(const std::string& client_id, const std::vector<DataType>& types);
+    bool disconnect_client(const std::string& client_id);
     bool activate_channel(DataType t);
     bool deactivate_channel(DataType t);
 
@@ -44,7 +44,7 @@ private:
     };
     mutable std::mutex mtx_;
     std::map<int, State> states_;
-    std::map<int64_t, std::set<int>> clients_;
+    std::map<std::string, std::set<int>> clients_;
 };
 
 }  // namespace sim_vision

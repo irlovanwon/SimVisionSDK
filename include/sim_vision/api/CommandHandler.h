@@ -33,16 +33,16 @@ public:
                    SimDataSource* source, CaptureEngine* capture);
 
     Response handle(const std::string& command, const nlohmann::json& body,
-                    int64_t client_id);
+                    const std::string& client_id);
 
     static std::string normalize_command(const std::string& path,
                                          const nlohmann::json& body);
 
 private:
-    Response cmd_connect(const nlohmann::json& body);
-    Response cmd_disconnect(const nlohmann::json& body, int64_t client_id);
-    Response cmd_start_capture(const nlohmann::json& body, int64_t client_id);
-    Response cmd_stop_capture(const nlohmann::json& body, int64_t client_id);
+    Response cmd_connect(const std::string& client_id);
+    Response cmd_disconnect(const std::string& client_id);
+    Response cmd_start_capture(const nlohmann::json& body, const std::string& client_id);
+    Response cmd_stop_capture(const nlohmann::json& body, const std::string& client_id);
     Response cmd_activate_channel(const nlohmann::json& body);
     Response cmd_deactivate_channel(const nlohmann::json& body);
     Response cmd_check_status() const;

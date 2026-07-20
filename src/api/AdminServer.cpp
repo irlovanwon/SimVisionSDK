@@ -30,10 +30,11 @@ namespace {
 constexpr auto kModule = "AdminServer";
 constexpr int kMaxPending = 100;
 
-int64_t unix_ms() {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-               std::chrono::system_clock::now().time_since_epoch())
-        .count();
+void unix_sec_nsec(int64_t& sec, int64_t& nsec) {
+    auto now = std::chrono::system_clock::now();
+    auto secs = std::chrono::time_point_cast<std::chrono::seconds>(now);
+    sec = std::chrono::duration_cast<std::chrono::seconds>(secs.time_since_epoch()).count();
+    nsec = std::chrono::duration_cast<std::chrono::nanoseconds>(now - secs).count();
 }
 
 bool read_until_headers(SSL* ssl, std::string& buf) {
@@ -286,9 +287,6 @@ void AdminServer::handle_connection(const Connection& conn) {
         if (body_raw.size() > content_length) body_raw.resize(content_length);
     }
 
-    const int64_t recv_ms = unix_ms();
-    const std::string recv_ts = format_log_timestamp();
-
     nlohmann::json body = nlohmann::json::object();
     if (!body_raw.empty()) {
         try {
@@ -298,23 +296,27 @@ void AdminServer::handle_connection(const Connection& conn) {
         }
     }
 
-    int64_t client_id = static_cast<int64_t>(conn.fd);
-    if (body.contains("client_id") && body["client_id"].is_number()) {
-        client_id = body["client_id"].get<int64_t>();
+    std::string client_id = "default";
+    if (body.contains("client_id")) {
+        if (body["client_id"].is_string()) {
+            client_id = body["client_id"].get<std::string>();
+        } else if (!body["client_id"].is_null()) {
+            client_id = body["client_id"].dump();
+        }
     }
 
     std::string command = CommandHandler::normalize_command(path, body);
     Response resp = handler_.handle(command, body, client_id);
 
-    const int64_t send_ms = unix_ms();
-    resp.data["_frame"]["client_id"] = client_id;
-    resp.data["_frame"]["client_addr"] = conn.peer_addr;
-    resp.data["_frame"]["server_id"] = cfg_.server_id;
-    resp.data["_frame"]["command"] = command;
-    resp.data["_frame"]["recv_ts"] = recv_ts;
-    resp.data["_frame"]["recv_unix_ms"] = recv_ms;
-    resp.data["_frame"]["send_ts"] = format_log_timestamp();
-    resp.data["_frame"]["send_unix_ms"] = send_ms;
+    int64_t r_sec = 0, r_nsec = 0, s_sec = 0, s_nsec = 0;
+    unix_sec_nsec(r_sec, r_nsec);
+    resp.server_id = cfg_.server_id;
+    resp.client_id = client_id;
+    resp.recv_sec = r_sec;
+    resp.recv_nsec = r_nsec;
+    unix_sec_nsec(s_sec, s_nsec);
+    resp.send_sec = s_sec;
+    resp.send_nsec = s_nsec;
 
     const std::string body_json = resp.to_json();
     std::string http = "HTTP/1.1 " + std::to_string(Response::http_status(resp.code)) + " OK\r\n";

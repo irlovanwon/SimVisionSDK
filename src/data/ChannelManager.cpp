@@ -12,7 +12,7 @@ namespace {
 int dt_key(DataType t) { return static_cast<int>(t); }
 }
 
-void ChannelManager::start_capture(int64_t client_id, const std::vector<DataType>& types) {
+void ChannelManager::start_capture(const std::string& client_id, const std::vector<DataType>& types) {
     std::lock_guard<std::mutex> lk(mtx_);
     auto& subs = clients_[client_id];
     for (DataType t : types) {
@@ -23,7 +23,7 @@ void ChannelManager::start_capture(int64_t client_id, const std::vector<DataType
     }
 }
 
-void ChannelManager::stop_capture(int64_t client_id, const std::vector<DataType>& types) {
+void ChannelManager::stop_capture(const std::string& client_id, const std::vector<DataType>& types) {
     std::lock_guard<std::mutex> lk(mtx_);
     auto it = clients_.find(client_id);
     if (it == clients_.end()) return;
@@ -38,7 +38,7 @@ void ChannelManager::stop_capture(int64_t client_id, const std::vector<DataType>
     }
 }
 
-bool ChannelManager::disconnect_client(int64_t client_id) {
+bool ChannelManager::disconnect_client(const std::string& client_id) {
     std::lock_guard<std::mutex> lk(mtx_);
     auto it = clients_.find(client_id);
     if (it == clients_.end()) return false;

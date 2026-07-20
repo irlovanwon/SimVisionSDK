@@ -33,8 +33,8 @@ struct Parameter {
     ParamValue default_value;
     bool is_readonly = false;
     bool is_available = true;
-    bool needs_restart = false;
-    std::vector<std::string> enum_values;
+    bool needs_reopen = false;
+    std::vector<std::string> enum_options;
 };
 
 class ParameterManager {

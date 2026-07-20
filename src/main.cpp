@@ -40,38 +40,47 @@ void ignore_sigpipe() {
 
 void register_parameters(sim_vision::ParameterManager& pm, const sim_vision::Config& cfg) {
     using namespace sim_vision;
-    auto add_int = [&](const std::string& n, int64_t def, int64_t lo, int64_t hi, bool restart) {
+    auto add_int = [&](const std::string& n, int64_t def, int64_t lo, int64_t hi, bool reopen) {
         Parameter p;
         p.name = n;
         p.value = def;
         p.min = lo;
         p.max = hi;
         p.default_value = def;
-        p.needs_restart = restart;
+        p.needs_reopen = reopen;
         pm.register_parameter(p);
     };
     auto add_enum = [&](const std::string& n, const std::string& def,
-                        std::vector<std::string> vals, bool restart) {
+                        std::vector<std::string> vals, bool reopen) {
         Parameter p;
         p.name = n;
         p.value = def;
         p.default_value = def;
-        p.min = std::string("Off");
-        p.max = std::string("On");
-        p.enum_values = std::move(vals);
-        p.needs_restart = restart;
+        p.enum_options = std::move(vals);
+        p.needs_reopen = reopen;
         pm.register_parameter(p);
     };
 
-    add_int("fps", cfg.capture.fps, 1, 240, true);
-    add_int("exposure_time", 0, 0, 33333, false);
-    add_enum("auto_exposure", "On", {"On", "Off"}, false);
-    add_int("gain_digital", 1, 1, 256, false);
-    add_int("gain_analog", 1000, 1000, 16000, false);
-    add_enum("auto_gain", "On", {"On", "Off"}, false);
+    // --- InitParameters (camera reopen simulated; takes effect next frame) ---
+    add_int("fps", cfg.capture.fps, 1, 120, true);
+    add_enum("resolution", "HD720",
+             {"HD2K", "HD1080", "HD720", "HD1200", "VGA"}, true);
     add_enum("depth_mode", "NEURAL",
              {"NONE", "NEURAL_LIGHT", "NEURAL", "NEURAL_PLUS", "PERFORMANCE", "QUALITY", "ULTRA"},
              true);
+
+    // --- RuntimeParameters (immediate effect) ---
+    add_int("exposure_time", 0, 0, 33333, false);
+    add_int("gain", 50, 0, 100, false);              // generic gain (non-ZED-X)
+    add_int("analog_gain", 1000, 1000, 16000, false); // ZED X series
+    add_int("digital_gain", 1, 1, 256, false);        // ZED X series
+    add_enum("auto_exposure_gain", "On", {"On", "Off"}, false);
+    add_enum("mem_type", "CPU", {"CPU", "GPU"}, false);
+
+    // --- Application-level Timer Gate (publish-rate throttle) ---
+    add_int("target_fps_2d", 15, 0, 240, false);
+    add_int("target_fps_3d", 15, 0, 240, false);
+    add_int("target_fps_sensor", 200, 0, 1000, false);
 }
 }  // namespace
 
@@ -101,6 +110,7 @@ int main(int argc, char** argv) {
 
     sim_vision::SimDataSource source;
     source.set_image_size(cfg.capture.image_width, cfg.capture.image_height);
+    source.set_image_channels(cfg.capture.image_channels);
     std::string ds_err;
     source.load(cfg.capture.stereo_image_dir, ds_err);
 

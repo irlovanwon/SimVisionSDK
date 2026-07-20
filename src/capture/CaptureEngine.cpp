@@ -10,6 +10,7 @@
 
 #include <chrono>
 #include <condition_variable>
+#include <cstring>
 #include <mutex>
 
 namespace sim_vision {
@@ -64,6 +65,7 @@ ChannelFramePtr CaptureEngine::build_frame(DataGroup group, int64_t ts_sec,
     f->ts_sec = ts_sec;
     f->ts_nsec = ts_nsec;
     f->frame_index = frame_index;
+    f->pair_id = frame_index;
     f->pub_id = pub_id;
 
     std::string depth_mode = "NEURAL";
@@ -71,51 +73,103 @@ ChannelFramePtr CaptureEngine::build_frame(DataGroup group, int64_t ts_sec,
     if (params_.get("depth_mode", p) && std::holds_alternative<param_type::Enum>(p.value)) {
         depth_mode = std::get<param_type::Enum>(p.value);
     }
-    int w = source_.image_width();
-    int h = source_.image_height();
+    const int w = source_.image_width();
+    const int h = source_.image_height();
 
-    for (DataType t : group_members(group)) {
-        if (!channels_.is_active(t)) continue;
+    auto make_bundle = [&](DataType t, const std::string& part_id) {
         auto b = std::make_shared<DataBundle>();
         b->type = t;
+        b->part_id = part_id;
         b->ts_sec = ts_sec;
         b->ts_nsec = ts_nsec;
         b->source = SimDataSource::version_tag();
+        return b;
+    };
+
+    for (DataType t : group_members(group)) {
+        if (!channels_.is_active(t)) continue;
         switch (t) {
             case DataType::StereoImage: {
                 StereoPair pair;
                 if (source_.next_stereo(pair)) {
-                    b->data.insert(b->data.end(), pair.left.begin(), pair.left.end());
-                    b->data.insert(b->data.end(), pair.right.begin(), pair.right.end());
+                    auto b = make_bundle(t, "stereo_image");
+                    const uint32_t lsize = static_cast<uint32_t>(pair.left.size());
+                    b->data.resize(sizeof(uint32_t) + pair.left.size() + pair.right.size());
+                    b->data[0] = static_cast<uint8_t>(lsize & 0xFF);
+                    b->data[1] = static_cast<uint8_t>((lsize >> 8) & 0xFF);
+                    b->data[2] = static_cast<uint8_t>((lsize >> 16) & 0xFF);
+                    b->data[3] = static_cast<uint8_t>((lsize >> 24) & 0xFF);
+                    std::memcpy(b->data.data() + sizeof(uint32_t),
+                                pair.left.data(), pair.left.size());
+                    std::memcpy(b->data.data() + sizeof(uint32_t) + pair.left.size(),
+                                pair.right.data(), pair.right.size());
+                    b->format = pair.left_info.format;
+                    b->is_encoded = pair.left_info.is_encoded;
+                    b->channels = pair.left_info.channels;
+                    b->code = pair.left_info.code;
+                    b->width = pair.left_info.width;
+                    b->height = pair.left_info.height;
+                    f->bundles.push_back(std::move(b));
                 }
                 break;
             }
-            case DataType::DepthMap:
+            case DataType::DepthMap: {
+                auto b = make_bundle(t, "depth_map");
                 b->data = source_.generate_depth(w, h, frame_index);
+                b->format = "raw_f32";
+                f->bundles.push_back(std::move(b));
                 break;
-            case DataType::DisparityMap:
+            }
+            case DataType::DisparityMap: {
+                auto b = make_bundle(t, "disparity_map");
                 b->data = source_.generate_disparity(w, h, frame_index);
+                b->format = "raw_f32";
+                f->bundles.push_back(std::move(b));
                 break;
-            case DataType::ConfidenceMap:
+            }
+            case DataType::ConfidenceMap: {
+                auto b = make_bundle(t, "confidence_map");
                 b->data = source_.generate_confidence(w, h, frame_index);
+                b->format = "raw_f32";
+                f->bundles.push_back(std::move(b));
                 break;
-            case DataType::PointCloud:
+            }
+            case DataType::PointCloud: {
+                auto b = make_bundle(t, "point_cloud");
                 b->data = source_.generate_pointcloud(depth_mode, frame_index);
+                b->format = "raw_f32x4";
+                f->bundles.push_back(std::move(b));
                 break;
-            case DataType::IMU:
+            }
+            case DataType::IMU: {
+                auto b = make_bundle(t, "imu");
                 b->data = source_.generate_imu(frame_index);
+                b->format = "json";
+                f->bundles.push_back(std::move(b));
                 break;
-            case DataType::Temperature:
+            }
+            case DataType::Temperature: {
+                auto b = make_bundle(t, "temperature");
                 b->data = source_.generate_temperature(frame_index);
+                b->format = "json";
+                f->bundles.push_back(std::move(b));
                 break;
-            case DataType::Magnetometer:
+            }
+            case DataType::Magnetometer: {
+                auto b = make_bundle(t, "magnetometer");
                 b->data = source_.generate_magnetometer(frame_index);
+                b->format = "json";
+                f->bundles.push_back(std::move(b));
                 break;
-            case DataType::Barometer:
+            }
+            case DataType::Barometer: {
+                auto b = make_bundle(t, "barometer");
                 b->data = source_.generate_barometer(frame_index);
+                b->format = "json";
+                f->bundles.push_back(std::move(b));
                 break;
+            }
         }
-        f->bundles.push_back(std::move(b));
     }
     return f;
 }

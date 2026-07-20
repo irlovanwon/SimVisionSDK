@@ -18,11 +18,20 @@
 
 namespace sim_vision {
 
+struct ImageInfo {
+    std::string format = "raw_u8";   // "JPG"/"PNG"/"TIFF"/"raw_u8"/"raw_u12"
+    bool is_encoded = false;         // true for JPG/PNG/TIFF
+    int channels = 0;                // decoded channel count
+    std::string code;                // color code "BGRA"/"RGB"/"GRAY"
+    int width = 0;
+    int height = 0;
+};
+
 struct StereoPair {
     std::vector<uint8_t> left;
     std::vector<uint8_t> right;
-    std::string left_ext;
-    std::string right_ext;
+    ImageInfo left_info;
+    ImageInfo right_info;
     size_t pair_index = 0;
 };
 
@@ -45,7 +54,9 @@ public:
 
     int image_width() const { return width_; }
     int image_height() const { return height_; }
+    int image_channels() const { return channels_; }
     void set_image_size(int w, int h);
+    void set_image_channels(int c) { channels_ = c; }
 
     static const char* version_tag() { return "SimVisionSDK/1.0"; }
 
@@ -55,6 +66,7 @@ private:
     std::atomic<size_t> cursor_{0};
     int width_ = 1280;
     int height_ = 720;
+    int channels_ = 4;
 };
 
 }  // namespace sim_vision

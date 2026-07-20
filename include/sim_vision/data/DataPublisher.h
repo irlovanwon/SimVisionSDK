@@ -43,8 +43,7 @@ public:
 private:
     void run();
     void send_group(const ChannelFramePtr& frame);
-    bool send_multipart(void* socket, const std::string& topic,
-                        const ChannelFramePtr& frame);
+    bool send_multipart(void* socket, const ChannelFramePtr& frame);
 
     void* ctx_;
     DataPipeline& pipeline_;

@@ -67,7 +67,7 @@ bool ParameterManager::set_value(const std::string& name, const ParamValue& valu
         }
     } else {
         const auto& ev = std::get<param_type::Enum>(value);
-        if (!enum_allowed(p.enum_values, ev)) {
+        if (!enum_allowed(p.enum_options, ev)) {
             err = "invalid enum value for parameter: " + name;
             return false;
         }

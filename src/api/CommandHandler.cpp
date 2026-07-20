@@ -58,12 +58,15 @@ nlohmann::json param_to_json(const Parameter& p) {
     j["type"] = param_variant_type_name(p.value);
     j["value"] = value_to_json(p.value);
     j["default"] = value_to_json(p.default_value);
-    j["min"] = value_to_json(p.min);
-    j["max"] = value_to_json(p.max);
     j["is_readonly"] = p.is_readonly;
     j["is_available"] = p.is_available;
-    j["needs_restart"] = p.needs_restart;
-    if (!p.enum_values.empty()) j["enum_values"] = p.enum_values;
+    j["needs_reopen"] = p.needs_reopen;
+    if (std::holds_alternative<param_type::Integer>(p.value) ||
+        std::holds_alternative<param_type::Float>(p.value)) {
+        j["min"] = value_to_json(p.min);
+        j["max"] = value_to_json(p.max);
+    }
+    if (!p.enum_options.empty()) j["enum_options"] = p.enum_options;
     return j;
 }
 
@@ -114,7 +117,13 @@ std::string CommandHandler::normalize_command(const std::string& path,
     std::string cmd;
     std::string p = path;
     if (!p.empty() && p.front() == '/') p = p.substr(1);
+    // StereoCamera routes camera-SDK calls under an /api/ prefix (e.g.
+    // /api/get_parameter). Strip any leading "api/" segment and take the last
+    // path segment as the command — matches ZEDVisionSDK routing.
+    if (p.rfind("api/", 0) == 0) p = p.substr(4);
     if (!p.empty()) {
+        size_t slash = p.find('/');
+        if (slash != std::string::npos) p = p.substr(slash + 1);
         cmd = to_lower(p);
         const auto& am = alias_map();
         auto it = am.find(cmd);
@@ -130,9 +139,9 @@ std::string CommandHandler::normalize_command(const std::string& path,
 }
 
 Response CommandHandler::handle(const std::string& command, const nlohmann::json& body,
-                                int64_t client_id) {
-    if (command == "connect") return cmd_connect(body);
-    if (command == "disconnect") return cmd_disconnect(body, client_id);
+                                const std::string& client_id) {
+    if (command == "connect") return cmd_connect(client_id);
+    if (command == "disconnect") return cmd_disconnect(client_id);
     if (command == "start_capture") return cmd_start_capture(body, client_id);
     if (command == "stop_capture") return cmd_stop_capture(body, client_id);
     if (command == "activate_channel") return cmd_activate_channel(body);
@@ -147,17 +156,24 @@ Response CommandHandler::handle(const std::string& command, const nlohmann::json
     return Response::from_error(Code::InvalidParam, "unknown command: " + command);
 }
 
-Response CommandHandler::cmd_connect(const nlohmann::json& /*body*/) {
-    int64_t id = sessions_.connect();
+Response CommandHandler::cmd_connect(const std::string& client_id) {
     Response r;
+    if (sessions_.is_connected(client_id)) {
+        r.code = Code::AlreadyInit;
+        r.message = "Already connected";
+        return r;
+    }
+    sessions_.connect(client_id);
     r.code = Code::Success;
     r.message = "Connected";
-    r.data["client_id"] = id;
-    SIM_LOG(LogLevel::INFO, "CommandHandler", "connect client_id=" + std::to_string(id));
+    SIM_LOG(LogLevel::INFO, "CommandHandler", "connect client_id=" + client_id);
     return r;
 }
 
-Response CommandHandler::cmd_disconnect(const nlohmann::json& /*body*/, int64_t client_id) {
+Response CommandHandler::cmd_disconnect(const std::string& client_id) {
+    if (!sessions_.is_connected(client_id)) {
+        return Response::from_error(Code::NotReady, "Not connected");
+    }
     channels_.disconnect_client(client_id);
     sessions_.disconnect(client_id);
     if (!channels_.any_subscriber()) {
@@ -168,11 +184,10 @@ Response CommandHandler::cmd_disconnect(const nlohmann::json& /*body*/, int64_t 
     Response r;
     r.code = Code::Success;
     r.message = "Disconnected";
-    r.data["client_id"] = client_id;
     return r;
 }
 
-Response CommandHandler::cmd_start_capture(const nlohmann::json& body, int64_t client_id) {
+Response CommandHandler::cmd_start_capture(const nlohmann::json& body, const std::string& client_id) {
     if (!sessions_.is_connected(client_id)) {
         return Response::from_error(Code::NotReady, "not connected — call connect first");
     }
@@ -184,12 +199,11 @@ Response CommandHandler::cmd_start_capture(const nlohmann::json& body, int64_t c
     Response r;
     r.code = Code::Success;
     r.message = "Capture started";
-    r.data["client_id"] = client_id;
-    for (DataType t : types) r.data["data_types"].push_back(data_type_to_string(t));
+    for (DataType t : types) r.detail["data_types"].push_back(data_type_to_string(t));
     return r;
 }
 
-Response CommandHandler::cmd_stop_capture(const nlohmann::json& body, int64_t client_id) {
+Response CommandHandler::cmd_stop_capture(const nlohmann::json& body, const std::string& client_id) {
     auto types = expand_types(body);
     if (types.empty()) {
         return Response::from_error(Code::InvalidParam, "no valid data_types");
@@ -202,8 +216,7 @@ Response CommandHandler::cmd_stop_capture(const nlohmann::json& body, int64_t cl
     Response r;
     r.code = Code::Success;
     r.message = "Capture stopped";
-    r.data["client_id"] = client_id;
-    for (DataType t : types) r.data["data_types"].push_back(data_type_to_string(t));
+    for (DataType t : types) r.detail["data_types"].push_back(data_type_to_string(t));
     return r;
 }
 
@@ -216,7 +229,8 @@ Response CommandHandler::cmd_activate_channel(const nlohmann::json& body) {
     Response r;
     r.code = Code::Success;
     r.message = changed ? "Channel activated" : "Channel already active";
-    r.data["data_type"] = data_type_to_string(t);
+    r.detail["data_type"] = data_type_to_string(t);
+    r.detail["restart_required"] = false;
     return r;
 }
 
@@ -232,7 +246,8 @@ Response CommandHandler::cmd_deactivate_channel(const nlohmann::json& body) {
     Response r;
     r.code = Code::Success;
     r.message = "Channel deactivated";
-    r.data["data_type"] = data_type_to_string(t);
+    r.detail["data_type"] = data_type_to_string(t);
+    r.detail["restart_required"] = true;
     return r;
 }
 
@@ -240,12 +255,12 @@ Response CommandHandler::cmd_check_status() const {
     Response r;
     r.code = Code::Success;
     r.message = "Status";
-    r.data["initialized"] = true;
-    r.data["sessions"] = sessions_.session_count();
-    r.data["simulator"] = SimDataSource::version_tag();
-    if (source_) r.data["stereo_pairs_loaded"] = source_->pair_count();
-    if (capture_) r.data["frames_produced"] = capture_->frames_produced();
-    r.data["channels"] = channels_.status_json();
+    r.detail["initialized"] = true;
+    r.detail["sessions"] = sessions_.session_count();
+    r.detail["simulator"] = SimDataSource::version_tag();
+    if (source_) r.detail["stereo_pairs_loaded"] = source_->pair_count();
+    if (capture_) r.detail["frames_produced"] = capture_->frames_produced();
+    r.detail["channels"] = channels_.status_json();
 
     nlohmann::json pub = nlohmann::json::object();
     if (publisher_) {
@@ -256,7 +271,7 @@ Response CommandHandler::cmd_check_status() const {
         pub["dropped_hwm"] = s.dropped_hwm;
         pub["shutdown_sent"] = s.shutdown_sent;
     }
-    r.data["publisher"] = pub;
+    r.detail["publisher"] = pub;
     if (pipeline_) {
         auto s = pipeline_->stats();
         nlohmann::json pl;
@@ -269,7 +284,7 @@ Response CommandHandler::cmd_check_status() const {
         pl["queue_2d"] = s.queue_2d;
         pl["queue_3d"] = s.queue_3d;
         pl["queue_sensor"] = s.queue_sensor;
-        r.data["pipeline"] = pl;
+        r.detail["pipeline"] = pl;
     }
     return r;
 }
@@ -288,7 +303,7 @@ Response CommandHandler::cmd_list_channels() const {
         c["subscribers"] = channels_.subscriber_count(t);
         arr.push_back(std::move(c));
     }
-    r.data["channels"] = arr;
+    r.detail["channels"] = arr;
     return r;
 }
 
@@ -298,7 +313,7 @@ Response CommandHandler::cmd_list_parameters() const {
     r.message = "Parameters";
     nlohmann::json arr = nlohmann::json::array();
     for (const Parameter& p : params_.all()) arr.push_back(param_to_json(p));
-    r.data["parameters"] = arr;
+    r.detail["parameters"] = arr;
     return r;
 }
 
@@ -313,7 +328,7 @@ Response CommandHandler::cmd_get_parameter(const nlohmann::json& body) const {
     Response r;
     r.code = Code::Success;
     r.message = "Success";
-    r.data = param_to_json(p);
+    r.detail = param_to_json(p);
     return r;
 }
 
@@ -341,8 +356,9 @@ Response CommandHandler::cmd_set_parameter(const nlohmann::json& body) {
     Response r;
     r.code = Code::Success;
     r.message = "Parameter set";
-    r.data["name"] = name;
-    r.data["needs_restart"] = p.needs_restart;
+    r.detail["name"] = name;
+    r.detail["value"] = value_to_json(v);
+    r.detail["needs_reopen"] = p.needs_reopen;
     return r;
 }
 

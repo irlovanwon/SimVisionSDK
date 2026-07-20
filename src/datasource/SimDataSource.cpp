@@ -52,6 +52,109 @@ void append_floats(std::vector<uint8_t>& out, const float* vals, size_t n) {
     out.insert(out.end(), p, p + n * sizeof(float));
 }
 
+uint16_t be16(const uint8_t* p) { return static_cast<uint16_t>((p[0] << 8) | p[1]); }
+uint32_t be32(const uint8_t* p) {
+    return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16) |
+           (static_cast<uint32_t>(p[2]) << 8) | static_cast<uint32_t>(p[3]);
+}
+uint32_t le32(const uint8_t* p) {
+    return static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8) |
+           (static_cast<uint32_t>(p[2]) << 16) | (static_cast<uint32_t>(p[3]) << 24);
+}
+
+// Probe an image buffer's real format + dimensions without decoding.
+// Detects JPEG (SOF marker), PNG (IHDR), and the synthetic SIMRAW1 test format.
+// Falls back to cfg defaults (def_w/def_h/def_ch) when probing fails.
+ImageInfo probe_image(const std::vector<uint8_t>& buf, const std::string& ext,
+                      int def_w, int def_h, int def_ch) {
+    ImageInfo info;
+    const size_t n = buf.size();
+
+    // Synthetic SIMRAW1 test format: 16-byte magic + <w LE><h LE> + raw rows.
+    if (n >= 24 && buf[0] == 'S' && buf[1] == 'I' && buf[2] == 'M' && buf[3] == 'R') {
+        info.format = "raw_u8";
+        info.is_encoded = false;
+        info.width = static_cast<int>(le32(buf.data() + 16));
+        info.height = static_cast<int>(le32(buf.data() + 20));
+        info.channels = 3;
+        info.code = "RGB";
+        return info;
+    }
+
+    // JPEG: scan markers for SOF0/SOF2.
+    if (n >= 4 && buf[0] == 0xFF && buf[1] == 0xD8) {
+        info.format = "JPG";
+        info.is_encoded = true;
+        size_t i = 2;
+        while (i + 3 < n) {
+            if (buf[i] != 0xFF) { ++i; continue; }
+            uint8_t marker = buf[i + 1];
+            if (marker == 0xC0 || marker == 0xC2) {  // SOF0 / SOF2
+                if (i + 9 < n) {
+                    info.height = be16(buf.data() + i + 5);
+                    info.width = be16(buf.data() + i + 7);
+                    int comp = buf[i + 9];
+                    info.channels = comp;
+                    info.code = (comp == 1) ? "GRAY" : "RGB";
+                    return info;
+                }
+            }
+            // Skip this marker segment.
+            if (i + 3 < n) {
+                size_t seg = be16(buf.data() + i + 2);
+                i += 2 + seg;
+            } else {
+                break;
+            }
+        }
+        info.channels = def_ch > 0 ? def_ch : 3;
+        info.code = (info.channels == 1) ? "GRAY" : "RGB";
+        info.width = def_w;
+        info.height = def_h;
+        return info;
+    }
+
+    // PNG: signature + IHDR.
+    static const uint8_t kPngSig[8] = {0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
+    if (n >= 24 && std::memcmp(buf.data(), kPngSig, 8) == 0) {
+        info.format = "PNG";
+        info.is_encoded = true;
+        info.width = static_cast<int>(be32(buf.data() + 16));
+        info.height = static_cast<int>(be32(buf.data() + 20));
+        int color_type = buf.size() > 25 ? buf[25] : 6;
+        switch (color_type) {
+            case 0: info.channels = 1; info.code = "GRAY"; break;
+            case 2: info.channels = 3; info.code = "RGB"; break;
+            case 3: info.channels = 1; info.code = "GRAY"; break;  // palette
+            case 4: info.channels = 2; info.code = "GRAYA"; break;
+            case 6: info.channels = 4; info.code = "RGBA"; break;
+            default: info.channels = 4; info.code = "RGBA"; break;
+        }
+        return info;
+    }
+
+    // TIFF.
+    if (n >= 4 && ((buf[0] == 'I' && buf[1] == 'I') || (buf[0] == 'M' && buf[1] == 'M'))) {
+        info.format = "TIFF";
+        info.is_encoded = true;
+        info.channels = def_ch > 0 ? def_ch : 3;
+        info.code = "RGB";
+        info.width = def_w;
+        info.height = def_h;
+        return info;
+    }
+
+    // Unknown — treat as raw_u8 with configured defaults.
+    info.format = "raw_u8";
+    info.is_encoded = false;
+    info.channels = def_ch > 0 ? def_ch : 4;
+    info.code = (info.channels == 4) ? "BGRA" : "RGB";
+    info.width = def_w;
+    info.height = def_h;
+    (void)ext;
+    return info;
+}
+
 }  // namespace
 
 bool SimDataSource::load(const std::string& stereo_dir, std::string& err) {
@@ -99,10 +202,19 @@ bool SimDataSource::load(const std::string& stereo_dir, std::string& err) {
         if (!have_left && !have_right) continue;
         if (have_left) read_file(kv.second.first, pair.left);
         if (have_right) read_file(kv.second.second, pair.right);
-        if (have_left && !have_right) pair.right = pair.left;
-        if (have_right && !have_left) pair.left = pair.right;
-        pair.left_ext = ext_of(kv.second.first);
-        pair.right_ext = ext_of(kv.second.second);
+        if (have_left && !have_right) {
+            pair.right = pair.left;
+        } else if (have_right && !have_left) {
+            pair.left = pair.right;
+        }
+        pair.left_info = probe_image(pair.left, ext_of(kv.second.first),
+                                     width_, height_, channels_);
+        if (have_left && have_right) {
+            pair.right_info = probe_image(pair.right, ext_of(kv.second.second),
+                                          width_, height_, channels_);
+        } else {
+            pair.right_info = pair.left_info;  // mirrored side
+        }
         loaded.push_back(std::move(pair));
     }
 

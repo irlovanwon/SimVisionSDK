@@ -48,10 +48,18 @@ std::string format_log_timestamp();
 
 struct DataBundle {
     DataType type;
+    std::string part_id;             // ZMQ part id ("left","right","depth_map",...)
     std::vector<uint8_t> data;
     int64_t ts_sec  = 0;
     int64_t ts_nsec = 0;
     std::string source;
+    // Part header metadata (emitted in ZMQ parts[] entry)
+    std::string format;              // "JPG"/"PNG"/"TIFF"/"raw_u8"/"raw_f32"/"raw_f32x4"/"json"
+    bool is_encoded = false;         // image only: true for JPG/PNG/TIFF
+    int channels = 0;                // image only
+    std::string code;                // image only: color code "BGRA"/"RGB"/"GRAY"
+    int width = 0;                   // image only
+    int height = 0;                  // image only
 };
 using DataBundlePtr = std::shared_ptr<DataBundle>;
 
@@ -59,6 +67,7 @@ struct ChannelFrame {
     DataGroup group;
     int64_t ts_sec  = 0;
     int64_t ts_nsec = 0;
+    uint64_t pair_id = 0;            // unique per capture tick (shared across all 3 groups)
     uint64_t frame_index = 0;
     std::string pub_id;
     std::vector<DataBundlePtr> bundles;

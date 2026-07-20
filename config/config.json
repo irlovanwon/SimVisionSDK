@@ -23,9 +23,9 @@
     "immediate": true,
     "linger_ms": 1000,
     "endpoints": {
-      "visual_2d": "ipc:///tmp/sim_vision_visual_2d",
-      "visual_3d": "ipc:///tmp/sim_vision_visual_3d",
-      "sensor_data": "ipc:///tmp/sim_vision_sensor_data"
+      "visual_2d": "ipc:///tmp/zed_vision_visual_2d",
+      "visual_3d": "ipc:///tmp/zed_vision_visual_3d",
+      "sensor_data": "ipc:///tmp/zed_vision_sensor_data"
     },
     "pub_id": "sim_vision_pub_01"
   },
@@ -36,12 +36,17 @@
   },
   "parameters": {
     "fps": 15,
+    "resolution": "HD720",
+    "depth_mode": "NEURAL",
     "exposure_time": 0,
-    "auto_exposure": "On",
-    "gain_digital": 1,
-    "gain_analog": 1000,
-    "auto_gain": "On",
-    "depth_mode": "NEURAL"
+    "gain": 50,
+    "analog_gain": 1000,
+    "digital_gain": 1,
+    "auto_exposure_gain": "On",
+    "mem_type": "CPU",
+    "target_fps_2d": 15,
+    "target_fps_3d": 15,
+    "target_fps_sensor": 200
   },
   "log_level": "info"
 }

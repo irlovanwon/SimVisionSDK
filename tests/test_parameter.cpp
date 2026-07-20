@@ -59,7 +59,7 @@ TEST(Parameter, EnumValidation) {
     p.name = "depth_mode";
     p.value = std::string("NEURAL");
     p.default_value = std::string("NEURAL");
-    p.enum_values = {"NONE", "NEURAL", "ULTRA"};
+    p.enum_options = {"NONE", "NEURAL", "ULTRA"};
     ParameterManager pm;
     pm.register_parameter(p);
     std::string err;
