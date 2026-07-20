@@ -264,7 +264,7 @@ std::vector<uint8_t> SimDataSource::generate_depth(int width, int height,
             double ny = static_cast<double>(y) / height;
             float d = 0.5f + 0.5f * static_cast<float>(std::sin(nx * 6.0 + t) *
                                                         std::cos(ny * 4.0 + t));
-            row[x] = d * 10.0f;
+            row[x] = 0.3f + 0.7f * d;
         }
         append_floats(out, row.data(), row.size());
     }
