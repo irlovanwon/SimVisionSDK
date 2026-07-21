@@ -5,8 +5,10 @@
 | EDGE01 | 100.85.117.73 | Deployment | `/home/user/ECIDS/SimVisionSDK` | This workspace |
 | EDGE02 | 100.69.131.6 | Deployment | `/home/user/ECIDS/SimVisionSDK` | This workspace |
 | EDGE03 | 100.110.227.12 | Deployment | `/home/user/ECIDS/SimVisionSDK` | This workspace |
+| SERVER01 | 100.121.224.17 | Deployment | `/home/irlovan/ECIDS/SimVisionSDK` | This workspace |
 
-All EDGE servers: SSH, username `user`, password `admin`, Linux aarch64.
+EDGE servers: SSH, username `user`, password `admin`, Linux aarch64.
+SERVER01: SSH, username `irlovan`, password `123456`, Linux x86_64.
 
 ## Quick Commands
 
@@ -23,15 +25,22 @@ cd /home/user/ECIDS/SimVisionSDK
 ## Deploy (from dev machine)
 
 ```bash
-# Sync source (exclude build artifacts + runtime files)
+# Sync source to EDGE server (exclude build artifacts + runtime files)
 rsync -az --delete \
   --exclude build --exclude log --exclude status --exclude '*.pid' \
   --exclude certs/*.pem --exclude certs/*.crt --exclude certs/*.key \
   /home/irlovan/AOC/Lib/One/SimVisionSDK/ \
   user@<EDGE_IP>:/home/user/ECIDS/SimVisionSDK/
+
+# Sync to SERVER01 (different user + path)
+rsync -az --delete \
+  --exclude build --exclude log --exclude status --exclude '*.pid' \
+  --exclude certs/*.pem --exclude certs/*.crt --exclude certs/*.key \
+  /home/irlovan/AOC/Lib/One/SimVisionSDK/ \
+  irlovan@100.121.224.17:/home/irlovan/ECIDS/SimVisionSDK/
 ```
 
-Then on the EDGE server run `./scripts/run.sh start` (builds + generates certs locally).
+Then on the server run `./scripts/run.sh start` (builds + generates certs locally).
 
 ## Logs & PID
 

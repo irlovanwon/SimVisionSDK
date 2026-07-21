@@ -54,10 +54,12 @@ Internal dataflow uses `std::shared_ptr` instead of memory copy to reduce alloca
 | EDGE01 | 100.85.117.73 | Deployment | `/home/user/ECIDS/SimVisionSDK` |
 | EDGE02 | 100.69.131.6 | Deployment | `/home/user/ECIDS/SimVisionSDK` |
 | EDGE03 | 100.110.227.12 | Deployment | `/home/user/ECIDS/SimVisionSDK` |
+| SERVER01 | 100.121.224.17 | Deployment | `/home/irlovan/ECIDS/SimVisionSDK` |
 
 ```bash
-ssh user@<EDGE_IP>
-cd /home/user/ECIDS/SimVisionSDK
+ssh user@<EDGE_IP>          # EDGE01/02/03 (user/admin)
+ssh irlovan@<SERVER01_IP>   # SERVER01 (irlovan/123456)
+cd /home/<user>/ECIDS/SimVisionSDK
 ./scripts/run.sh start      # Build (if needed) + start
 ./scripts/run.sh status     # Check status
 ```
