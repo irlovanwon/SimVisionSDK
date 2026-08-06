@@ -17,12 +17,14 @@
 #include "sim_vision/datasource/SimDataSource.h"
 
 #include <zmq.h>
+#include <nlohmann/json.hpp>
 
 #include <atomic>
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -75,12 +77,70 @@ void register_parameters(sim_vision::ParameterManager& pm, const sim_vision::Con
     add_int("analog_gain", 1000, 1000, 16000, false); // ZED X series
     add_int("digital_gain", 1, 1, 256, false);        // ZED X series
     add_enum("auto_exposure_gain", "On", {"On", "Off"}, false);
+
+    // --- ZED-X imaging params (simulated; mirror ZEDVisionSDK) ---
+    add_int("exposure_compensation", 50, 0, 100, false);  // AE target compensation 0-100
+    add_int("denoising", 50, 0, 100, false);               // denoising level 0-100
+    {   Parameter p; p.name = "scene_illuminance"; p.value = (int64_t)0; p.default_value = (int64_t)0; p.is_readonly = true; pm.register_parameter(p); }
+
     add_enum("mem_type", "CPU", {"CPU", "GPU"}, false);
 
     // --- Application-level Timer Gate (publish-rate throttle) ---
     add_int("target_fps_2d", 15, 0, 240, false);
     add_int("target_fps_3d", 15, 0, 240, false);
     add_int("target_fps_sensor", 200, 0, 1000, false);
+}
+}  // namespace
+
+// --- CameraSetting.json persistence (per-SDK native parameter store) ---
+namespace {
+nlohmann::json param_value_to_json(const sim_vision::Parameter& p) {
+    using namespace sim_vision;
+    if (std::holds_alternative<param_type::Integer>(p.value))
+        return std::get<param_type::Integer>(p.value);
+    if (std::holds_alternative<param_type::Float>(p.value))
+        return std::get<param_type::Float>(p.value);
+    return std::get<param_type::Enum>(p.value);
+}
+
+void load_camera_setting(const std::string& config_dir, sim_vision::ParameterManager& pm) {
+    std::string path = config_dir + "/CameraSetting.json";
+    std::ifstream ifs(path);
+    if (!ifs.is_open()) return;
+    try {
+        nlohmann::json j;
+        ifs >> j;
+        for (const auto& it : j.items()) {
+            const std::string& name = it.key();
+            sim_vision::Parameter cur;
+            if (!pm.get(name, cur)) continue;
+            sim_vision::ParamValue v;
+            if (std::holds_alternative<sim_vision::param_type::Integer>(cur.value))
+                v = static_cast<sim_vision::param_type::Integer>(it.value().get<int64_t>());
+            else if (std::holds_alternative<sim_vision::param_type::Float>(cur.value))
+                v = it.value().get<sim_vision::param_type::Float>();
+            else
+                v = it.value().get<std::string>();
+            std::string err;
+            pm.set_value(name, v, err);
+        }
+        SIM_LOG(sim_vision::LogLevel::INFO, "Main", "Loaded CameraSetting.json: " + path);
+    } catch (const std::exception& e) {
+        SIM_LOG(sim_vision::LogLevel::WARN, "Main", std::string("CameraSetting.json parse failed: ") + e.what());
+    }
+}
+
+void save_camera_setting(const std::string& config_dir, const sim_vision::ParameterManager& pm) {
+    std::string path = config_dir + "/CameraSetting.json";
+    try {
+        nlohmann::json j = nlohmann::json::object();
+        for (const auto& p : pm.all()) j[p.name] = param_value_to_json(p);
+        std::ofstream ofs(path);
+        ofs << j.dump(2);
+        SIM_LOG(sim_vision::LogLevel::INFO, "Main", "Saved CameraSetting.json: " + path);
+    } catch (const std::exception& e) {
+        SIM_LOG(sim_vision::LogLevel::WARN, "Main", std::string("CameraSetting.json save failed: ") + e.what());
+    }
 }
 }  // namespace
 
@@ -116,6 +176,7 @@ int main(int argc, char** argv) {
 
     sim_vision::ParameterManager params;
     register_parameters(params, cfg);
+    load_camera_setting(config_dir, params);  // override defaults with persisted user settings
 
     sim_vision::ChannelManager channels;
     sim_vision::SessionManager sessions;
@@ -159,6 +220,7 @@ int main(int argc, char** argv) {
     engine.stop();
     pipeline.drain();
     publisher.stop();
+    save_camera_setting(config_dir, params);  // persist tuned camera settings
 
     zmq_ctx_destroy(zmq_ctx);
     SIM_LOG(sim_vision::LogLevel::INFO, "Main", "SimVisionSDK stopped cleanly");
