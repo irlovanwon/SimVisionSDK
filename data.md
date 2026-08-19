@@ -110,8 +110,10 @@ Image parts (StereoImage left/right) carry full image metadata so the consumer c
 | `size` | int | Payload size in bytes |
 | `format` | string | `raw_u8` / `raw_u12` (raw) **or** `JPG` / `PNG` / `TIFF` (encoded) |
 | `is_encoded` | bool | `true` for JPG/PNG/TIFF; `false` for raw_u* |
-| `channels` | int | Decoded channel count (e.g. 3, 4) |
-| `code` | string | Channel layout code: `RGB`, `BGRA`, `GRAY`, `RGBA`, `GRAYA` |
+| `channels` | int | Decoded channel count (left image for stereo) |
+| `code` | string | Raw-type flag (canonical vocabulary, same as PylonVisionSDK): `RGB`, `BGRA`, `Mono`, `RGBA`, `GRAYA` (encoded PNG gray+alpha only) |
+| `right_channels` | int | Stereo only: right image channel count (present when it differs from the left — mixed L/R file formats possible) |
+| `right_channel_layout` | string | Stereo only: right image raw-type flag (present when it differs from the left) |
 | `width` | int | Image width in pixels |
 | `height` | int | Image height in pixels |
 

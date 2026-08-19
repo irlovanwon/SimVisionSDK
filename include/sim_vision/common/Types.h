@@ -2,7 +2,7 @@
  * Copyright(c) 2026-2030, VIATECH & UZONE All rights reserved
  * Des: Core data types, DataType enum, groups, timestamps, DataBundle, ChannelFrame
  * Date: 20260719
- * Modification:
+ * Modification: 20260819 DataBundle: right_channels/right_code per-side raw-type flags; mono flag "Mono"
  */
 #pragma once
 
@@ -57,7 +57,9 @@ struct DataBundle {
     std::string format;              // "JPG"/"PNG"/"TIFF"/"raw_u8"/"raw_f32"/"raw_f32x4"/"json"
     bool is_encoded = false;         // image only: true for JPG/PNG/TIFF
     int channels = 0;                // image only
-    std::string code;                // image only: color code "BGRA"/"RGB"/"GRAY"
+    std::string code;                // image only: raw-type flag "BGRA"/"RGB"/"BGR"/"RGBA"/"Mono"
+    int right_channels = 0;          // stereo only: right image channel count (when different from left)
+    std::string right_code;          // stereo only: right image raw-type flag (when different from left)
     int width = 0;                   // image only
     int height = 0;                  // image only
 };

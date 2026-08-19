@@ -2,7 +2,7 @@
  * Copyright(c) 2026-2030, VIATECH & UZONE All rights reserved
  * Des: Subscriber-driven capture loop — FPS-paced via CV wait_for (low-power)
  * Date: 20260719
- * Modification:
+ * Modification: 20260819 Stereo bundle carries right_channels/right_code (mixed L/R formats possible)
  */
 #include "sim_vision/capture/CaptureEngine.h"
 
@@ -107,6 +107,8 @@ ChannelFramePtr CaptureEngine::build_frame(DataGroup group, int64_t ts_sec,
                     b->is_encoded = pair.left_info.is_encoded;
                     b->channels = pair.left_info.channels;
                     b->code = pair.left_info.code;
+                    b->right_channels = pair.right_info.channels;
+                    b->right_code = pair.right_info.code;
                     b->width = pair.left_info.width;
                     b->height = pair.left_info.height;
                     f->bundles.push_back(std::move(b));

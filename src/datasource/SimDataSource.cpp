@@ -2,7 +2,7 @@
  * Copyright(c) 2026-2030, VIATECH & UZONE All rights reserved
  * Des: Loads stereo images to RAM (round-robin) and generates synthetic sensor/3D data
  * Date: 20260719
- * Modification:
+ * Modification: 20260819 Mono flag normalized to "Mono" (was "GRAY") — canonical raw-type vocabulary
  */
 #include "sim_vision/datasource/SimDataSource.h"
 
@@ -95,7 +95,7 @@ ImageInfo probe_image(const std::vector<uint8_t>& buf, const std::string& ext,
                     info.width = be16(buf.data() + i + 7);
                     int comp = buf[i + 9];
                     info.channels = comp;
-                    info.code = (comp == 1) ? "GRAY" : "RGB";
+                    info.code = (comp == 1) ? "Mono" : "RGB";
                     return info;
                 }
             }
@@ -108,7 +108,7 @@ ImageInfo probe_image(const std::vector<uint8_t>& buf, const std::string& ext,
             }
         }
         info.channels = def_ch > 0 ? def_ch : 3;
-        info.code = (info.channels == 1) ? "GRAY" : "RGB";
+        info.code = (info.channels == 1) ? "Mono" : "RGB";
         info.width = def_w;
         info.height = def_h;
         return info;
@@ -123,9 +123,9 @@ ImageInfo probe_image(const std::vector<uint8_t>& buf, const std::string& ext,
         info.height = static_cast<int>(be32(buf.data() + 20));
         int color_type = buf.size() > 25 ? buf[25] : 6;
         switch (color_type) {
-            case 0: info.channels = 1; info.code = "GRAY"; break;
+            case 0: info.channels = 1; info.code = "Mono"; break;
             case 2: info.channels = 3; info.code = "RGB"; break;
-            case 3: info.channels = 1; info.code = "GRAY"; break;  // palette
+            case 3: info.channels = 1; info.code = "Mono"; break;  // palette
             case 4: info.channels = 2; info.code = "GRAYA"; break;
             case 6: info.channels = 4; info.code = "RGBA"; break;
             default: info.channels = 4; info.code = "RGBA"; break;

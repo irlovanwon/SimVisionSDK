@@ -22,7 +22,7 @@ struct ImageInfo {
     std::string format = "raw_u8";   // "JPG"/"PNG"/"TIFF"/"raw_u8"/"raw_u12"
     bool is_encoded = false;         // true for JPG/PNG/TIFF
     int channels = 0;                // decoded channel count
-    std::string code;                // color code "BGRA"/"RGB"/"GRAY"
+    std::string code;                // raw-type flag "BGRA"/"RGB"/"Mono"/"GRAYA"/"RGBA"
     int width = 0;
     int height = 0;
 };

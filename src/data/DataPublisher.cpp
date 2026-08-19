@@ -2,7 +2,7 @@
  * Copyright(c) 2026-2030, VIATECH & UZONE All rights reserved
  * Des: ZMQ PUB publisher — 3 grouped channels, zero-copy, drop-NEWEST at HWM
  * Date: 20260719
- * Modification:
+ * Modification: 20260819 parts[] header emits right_channels/right_channel_layout when the right format differs
  */
 #include "sim_vision/data/DataPublisher.h"
 
@@ -169,6 +169,12 @@ bool DataPublisher::send_multipart(void* sock, const ChannelFramePtr& frame) {
             p["channel_layout"] = b->code;
             p["width"] = b->width;
             p["height"] = b->height;
+            if (b->right_channels > 0) {
+                p["right_channels"] = b->right_channels;
+            }
+            if (!b->right_code.empty()) {
+                p["right_channel_layout"] = b->right_code;
+            }
         }
         parts.push_back(std::move(p));
     }
